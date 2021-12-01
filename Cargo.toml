@@ -1,0 +1,12 @@
+[package]
+name = "sex_coin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+uuid = { version = "0.8", features = ["serde", "v4"] }
+sha2 = "0.9.8"
+aes = "0.7.5"
+rand = "0.8.4"
