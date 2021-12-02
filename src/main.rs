@@ -12,8 +12,4 @@ use Block::transaction::Transaction;
 fn main() {
     let mut wallets: HashMap<String, Rc<RefCell<Wallet>>> = HashMap::new();
     let mut mempool: Vec<Transaction> = vec![];
-    let mywallet_address = wallet::Wallet::new(&mut wallets).unwrap();
-    let mywallet = wallets.get(&mywallet_address).unwrap();
-    println!("{:?}", wallets);
-    println!("{:?}", mywallet)
 }

@@ -62,7 +62,18 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn new(wallets: &mut HashMap<String, Rc<RefCell<Wallet>>>) -> Result<String> {
+    ///
+    ///
+    /// creates a wallet and put it in the wallets hashmap
+    /// ```
+    ///let mut wallets: HashMap<String, Rc<RefCell<Wallet>>> = HashMap::new();
+    ///let mut mempool: Vec<Transaction> = vec![];
+    ///let mywallet = wallet::Wallet::new(&mut wallets).unwrap();
+    //let d = (*mywallet).borrow();
+    //println!("{:?}", wallets);
+    /// ```
+
+    pub fn new(wallets: &mut HashMap<String, Rc<RefCell<Wallet>>>) -> Result<Rc<RefCell<Wallet>>> {
         let keys = generate_keys()?;
 
         println!("PRIVATE KEY: {}", keys.1);
@@ -74,6 +85,6 @@ impl Wallet {
             public_key: keys.0.clone(),
         }));
         let rc_wallet = wallets.insert(address.to_string(), Rc::clone(&w));
-        Ok(address.to_string())
+        Ok(w)
     }
 }
