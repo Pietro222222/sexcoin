@@ -1,4 +1,9 @@
 # TODO
-- Block [x]
-- Transaction [x]
-- Wallet [x]
+Wallet - [x]
+Transaction - [x]
+    Sign - [x] 
+blockchain
+    blocks - [x]
+        save - []
+        load blocks - []
+     

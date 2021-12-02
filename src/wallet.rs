@@ -1,8 +1,12 @@
-use aes::cipher::{
-    generic_array::GenericArray, BlockCipher, BlockDecrypt, BlockEncrypt, NewBlockCipher,
-};
-use aes::{Aes128, Block, ParBlocks};
+use openssl::rsa::{Padding, Rsa};
+use openssl::symm::Cipher;
+use rand::rngs::OsRng;
 use rand::Rng;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::{Result, Write};
+use std::rc::Rc;
 use uuid::Uuid;
 
 fn generate_random_word(length: usize) -> String {
@@ -21,43 +25,55 @@ fn generate_random_word(length: usize) -> String {
     password
 }
 
-pub fn generate_keys() -> (Vec<u8>, String, String) /*Aes, Public, private key*/ {
-    let public_key = generate_random_word(64);
-    let private_key = generate_random_word(16);
-    let private_key_bytes = GenericArray::from_slice(private_key.as_bytes());
+pub fn generate_keys() -> Result<(String, String, String)> /*Public, private key, PassPhrase*/ {
+    let passphrase = generate_random_word(32);
 
-    /*
-     *  Aes = Public key
-     *  Public key = Aes but decrypted with the Private Key
-     */
+    let rsa = Rsa::generate(1024)?;
 
-    let mut block = Block::default();
-    let mut block8 = ParBlocks::default();
-    let cipher = Aes128::new(&private_key_bytes);
+    let private_key: Vec<u8> =
+        rsa.private_key_to_pem_passphrase(Cipher::aes_128_cbc(), passphrase.as_bytes())?;
+    OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(".private_key")
+        .unwrap()
+        .write(&private_key);
 
-    let block_copy = block.clone();
+    OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(".passphrase")
+        .unwrap()
+        .write(&passphrase.as_bytes());
 
-    let encrypted = cipher.encrypt_block(&mut block);
-
-    (block.to_vec(), public_key, private_key)
+    let public_key: Vec<u8> = rsa.public_key_to_pem()?;
+    Ok((
+        String::from_utf8(public_key).unwrap(),
+        String::from_utf8(private_key).unwrap(),
+        passphrase,
+    ))
 }
 
+#[derive(Debug)]
 pub struct Wallet {
     pub amount: f64,
     pub address: Uuid,
-    pub public_key: String, //SHA256 Encrypted text
-    pub sign: Vec<u8>,
+    pub public_key: String,
 }
 
 impl Wallet {
-    pub fn new(key: String) -> Self {
-        let keys = generate_keys();
-        println!("PRIVATE KEY: {}", keys.2);
-        Wallet {
+    pub fn new(wallets: &mut HashMap<String, Rc<Wallet>>) -> Result<Rc<Self>> {
+        let keys = generate_keys()?;
+
+        println!("PRIVATE KEY: {}", keys.1);
+        let w = Rc::new(Wallet {
             amount: 0.0,
             address: Uuid::new_v4(),
-            public_key: keys.1,
-            sign: keys.0,
-        }
+            public_key: keys.0,
+        });
+
+        wallets.insert(w.address.to_string().clone(), Rc::clone(&w));
+
+        Ok(Rc::clone(&w))
     }
 }

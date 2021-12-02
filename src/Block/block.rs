@@ -1,7 +1,7 @@
 use super::transaction::Transaction;
 use crate::wallet::Wallet;
-
-use std::{error::Error, fmt, ptr::null};
+use openssl::rsa::{Padding, Rsa};
+use std::{error::Error, fmt};
 
 pub struct Block {
     pub miner: Wallet,
@@ -21,6 +21,7 @@ pub struct Block {
 #[derive(Debug)]
 pub enum BlockError {
     InvalidHash,
+    InvalidTransaction,
 }
 
 impl Error for BlockError {}
@@ -44,6 +45,22 @@ impl Block {
         let rep = "0".repeat((difficulty as usize).clone()).to_string();
         if hash.starts_with(&rep) {
             return Err(BlockError::InvalidHash);
+        }
+
+        for t in &transactions {
+            let payer_pk = match Rsa::public_key_from_pem(t.payer.address.as_bytes()) {
+                Ok(res) => res,
+                Err(e) => return Err(BlockError::InvalidTransaction),
+            };
+
+            let mut buf: Vec<u8> = vec![];
+            if let Err(e) = payer_pk.public_decrypt(&t.sign, &mut buf, Padding::PKCS1) {
+                return Err(BlockError::InvalidTransaction);
+            }
+
+            if buf != t.sign {
+                return Err(BlockError::InvalidTransaction);
+            }
         }
 
         Ok(Block {
