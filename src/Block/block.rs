@@ -1,13 +1,15 @@
-use super::transaction::Transaction;
+use super::transaction::{self, Transaction};
 use crate::wallet::Wallet;
 use openssl::rsa::{Padding, Rsa};
+use sha2::{Digest, Sha512};
 use std::{error::Error, fmt};
 
+#[derive(Debug)]
 pub struct Block {
-    pub miner: Wallet,
+    pub miner: String,
     pub reward: u8,
     pub number: u64,
-    pub transactions: [Transaction; 1024],
+    pub transactions: Vec<Transaction>,
     pub block_hash: String,
     pub nonce: u64,
     pub difficulty: u8,
@@ -32,6 +34,30 @@ impl fmt::Display for BlockError {
     }
 }
 
+fn to_hex_string(bytes: Vec<u8>) -> String {
+    let strs: Vec<String> = bytes.iter().map(|b| format!("{:02X}", b)).collect();
+    strs.join("").to_ascii_lowercase().to_string()
+}
+
+fn gen_block_hash(
+    nonce: &u64,
+    diff: &u8,
+    transactions: &Vec<Transaction>,
+    miner: &Wallet,
+) -> String {
+    let bytes = format!(
+        "{:?}{}{}{}",
+        transactions,
+        &nonce,
+        &diff,
+        miner.address.to_string()
+    );
+
+    let mut hasher = Sha512::new();
+    hasher.update(bytes.as_bytes());
+    to_hex_string(hasher.finalize().to_vec())
+}
+
 impl Block {
     pub fn new(
         miner: Wallet,
@@ -48,7 +74,7 @@ impl Block {
         }
 
         for t in &transactions {
-            let payer_pk = match Rsa::public_key_from_pem(t.payer.address.as_bytes()) {
+            let payer_pk = match Rsa::public_key_from_pem(t.payer.public_key.as_bytes()) {
                 Ok(res) => res,
                 Err(e) => return Err(BlockError::InvalidTransaction),
             };
@@ -58,20 +84,63 @@ impl Block {
                 return Err(BlockError::InvalidTransaction);
             }
 
-            if buf != t.sign {
+            if buf
+                != (format!(
+                    "{}{}{}{}",
+                    &t.payer.address,
+                    &t.receiver.address,
+                    &t.amount,
+                    &t.transaction_id.to_string()
+                )
+                .as_bytes())
+            {
                 return Err(BlockError::InvalidTransaction);
             }
         }
 
         Ok(Block {
-            miner: miner,
+            miner: miner.address.to_string(),
             number: number.clone(),
-            transactions: transactions,
+            transactions: transactions.to_vec(),
             nonce: nonce,
             block_hash: hash,
             last_block_hash: last_block_hash,
             reward: (50 - (number / 20000) as u8),
             difficulty: difficulty,
         })
+    }
+    pub fn mine_block(
+        miner: &mut Wallet,
+        mempool: &Vec<Transaction>,
+        last_block: Option<Block>,
+        diff: u8,
+    ) -> Block {
+        let rep = "0".repeat(diff as usize);
+        let mut nonce: u64 = 0;
+        let transactions = mempool.get(0..1024).unwrap_or(&mempool).clone().to_owned();
+        let mut hash = gen_block_hash(&nonce, &diff, &transactions, miner);
+        loop {
+            if hash.starts_with(&rep) {
+                break;
+            }
+            nonce += 1;
+            hash = gen_block_hash(&nonce, &diff, &transactions, miner);
+        }
+        let (number, last_block_hash) = match last_block {
+            Some(d) => (d.number, Some(d.block_hash)),
+            None => (0 as u64, None),
+        };
+        miner.amount += 50.0;
+
+        Block {
+            block_hash: hash,
+            difficulty: diff,
+            miner: miner.address.to_string(),
+            nonce: nonce,
+            number: number,
+            last_block_hash: last_block_hash,
+            reward: 50,
+            transactions: transactions,
+        }
     }
 }

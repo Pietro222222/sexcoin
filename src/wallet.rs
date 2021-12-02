@@ -5,7 +5,7 @@ use rand::Rng;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::{Result, Write};
+use std::io::{Error, ErrorKind, Result, Write};
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -54,7 +54,7 @@ pub fn generate_keys() -> Result<(String, String, String)> /*Public, private key
     ))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Wallet {
     pub amount: f64,
     pub address: Uuid,
@@ -62,18 +62,18 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn new(wallets: &mut HashMap<String, Rc<Wallet>>) -> Result<Rc<Self>> {
+    pub fn new(wallets: &mut HashMap<String, Rc<RefCell<Wallet>>>) -> Result<String> {
         let keys = generate_keys()?;
 
         println!("PRIVATE KEY: {}", keys.1);
-        let w = Rc::new(Wallet {
+        let address = Uuid::new_v4();
+
+        let w = Rc::new(RefCell::new(Wallet {
             amount: 0.0,
-            address: Uuid::new_v4(),
-            public_key: keys.0,
-        });
-
-        wallets.insert(w.address.to_string().clone(), Rc::clone(&w));
-
-        Ok(Rc::clone(&w))
+            address: address.clone(),
+            public_key: keys.0.clone(),
+        }));
+        let rc_wallet = wallets.insert(address.to_string(), Rc::clone(&w));
+        Ok(address.to_string())
     }
 }

@@ -2,12 +2,15 @@ use crate::wallet::Wallet;
 use openssl::rsa::{Padding, Rsa};
 use rand::rngs::OsRng;
 use std::{error::Error, fmt};
+use uuid::Uuid;
 
+#[derive(Debug, Clone)]
 pub struct Transaction {
     pub receiver: Wallet,
     pub payer: Wallet,
     pub amount: f64,
     pub sign: Vec<u8>,
+    pub transaction_id: Uuid,
 }
 
 #[derive(Debug)]
@@ -49,8 +52,17 @@ impl Transaction {
         };
 
         let mut buf: Vec<u8> = vec![0; rsa.size() as usize];
+
+        let transaction_id = Uuid::new_v4();
         if let Err(e) = rsa.private_encrypt(
-            format!("{}{}{}", &p.address, &r.address, &a).as_bytes(),
+            format!(
+                "{}{}{}{}",
+                &p.address,
+                &r.address,
+                &a,
+                &transaction_id.to_string()
+            )
+            .as_bytes(),
             &mut buf,
             Padding::PKCS1,
         ) {
@@ -62,6 +74,7 @@ impl Transaction {
             payer: p,
             receiver: r,
             sign: buf,
+            transaction_id: transaction_id,
         })
     }
 }
